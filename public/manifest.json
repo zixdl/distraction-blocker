@@ -1,0 +1,28 @@
+{
+  "manifest_version": 3,
+  "name": "Distraction Blocker",
+  "version": "0.1.0",
+  "description": "Temporarily block distracting websites during a focus session.",
+  "permissions": [
+    "storage",
+    "alarms",
+    "declarativeNetRequestWithHostAccess"
+  ],
+  "host_permissions": ["http://*/*", "https://*/*"],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "Distraction Blocker",
+    "default_popup": "popup.html"
+  },
+  "options_page": "options.html",
+  "incognito": "not_allowed",
+  "web_accessible_resources": [
+    {
+      "resources": ["blocked.html"],
+      "matches": ["http://*/*", "https://*/*"]
+    }
+  ]
+}

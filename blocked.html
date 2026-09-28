@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Site blocked</title>
+  </head>
+  <body class="blocked-body">
+    <main class="blocked-card">
+      <div class="blocked-icon" aria-hidden="true">◉</div>
+      <p class="eyebrow">Distraction Blocker</p>
+      <h1 id="blocked-title">This site is blocked during your focus session</h1>
+      <p id="blocked-domain" class="blocked-domain"></p>
+      <p id="blocked-remaining" class="timer small"></p>
+      <div id="blocked-actions" class="action-row">
+        <button id="go-back" class="primary-button" type="button">Go back</button>
+        <button id="close-tab" class="secondary-button" type="button">Close tab</button>
+      </div>
+      <a id="open-site" class="primary-link" href="#" hidden>Open site</a>
+    </main>
+    <script type="module" src="/src/blocked.ts"></script>
+  </body>
+</html>

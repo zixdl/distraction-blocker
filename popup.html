@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Distraction Blocker</title>
+  </head>
+  <body class="popup-body">
+    <main class="popup-shell">
+      <header class="brand-row">
+        <span class="brand-mark" aria-hidden="true">◉</span>
+        <h1>Distraction Blocker</h1>
+      </header>
+      <p id="status-message" class="status-message" role="status" aria-live="polite"></p>
+      <section id="idle-view" hidden>
+        <p class="eyebrow">Focus duration</p>
+        <div class="duration-grid" role="radiogroup" aria-label="Focus duration">
+          <button class="duration-option selected" data-minutes="25" type="button">25 min</button>
+          <button class="duration-option" data-minutes="50" type="button">50 min</button>
+          <button class="duration-option" data-minutes="90" type="button">90 min</button>
+        </div>
+        <label class="field-label" for="custom-duration">Custom minutes</label>
+        <input id="custom-duration" class="text-input" type="number" min="1" max="1440" placeholder="1–1440" />
+        <p id="domain-summary" class="muted"></p>
+        <button id="start-session" class="primary-button" type="button">Start focus session</button>
+        <button id="manage-sites" class="link-button" type="button">Manage blocked sites</button>
+      </section>
+      <section id="active-view" hidden>
+        <p class="eyebrow">Focus session active</p>
+        <p id="remaining-time" class="timer" aria-live="polite">00:00</p>
+        <p id="active-domain-summary" class="muted"></p>
+        <div id="end-idle">
+          <button id="request-end" class="danger-button" type="button">End session early</button>
+        </div>
+        <div id="end-confirmation" class="confirmation-panel" hidden>
+          <p id="end-countdown">Wait 10 seconds to confirm.</p>
+          <button id="confirm-end" class="danger-button" type="button" disabled>Confirm end session</button>
+          <button id="cancel-end" class="link-button" type="button">Cancel</button>
+        </div>
+      </section>
+    </main>
+    <script type="module" src="/src/popup.ts"></script>
+  </body>
+</html>

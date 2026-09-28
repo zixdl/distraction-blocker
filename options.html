@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Manage blocked sites</title>
+  </head>
+  <body>
+    <main class="page-shell">
+      <header class="page-header">
+        <div>
+          <p class="eyebrow">Distraction Blocker</p>
+          <h1>Blocked sites</h1>
+          <p class="lede">Choose the sites that should be unavailable during a focus session.</p>
+        </div>
+      </header>
+      <p id="options-status" class="status-message" role="status" aria-live="polite"></p>
+      <section class="card">
+        <form id="add-domain-form" class="add-domain-form">
+          <label class="field-label" for="domain-input">Add a domain or URL</label>
+          <div class="input-row">
+            <input id="domain-input" class="text-input" type="text" placeholder="youtube.com" autocomplete="off" />
+            <button class="primary-button compact" type="submit">Add site</button>
+          </div>
+        </form>
+        <p id="active-notice" class="notice" hidden>Site changes are disabled while a focus session is active.</p>
+        <ul id="domain-list" class="domain-list"></ul>
+      </section>
+    </main>
+    <script type="module" src="/src/options.ts"></script>
+  </body>
+</html>
