@@ -15,17 +15,15 @@ Node.js is not required on the host when using the canonical Docker workflow.
 docker compose build
 ```
 
-The image installs dependencies with `npm ci`, then runs type-checking, unit tests, and a production build as verification.
+The image installs dependencies with `npm ci` and provides the canonical Node.js environment for development commands.
 
 ## Run checks
 
 ```sh
-docker compose run --rm app npm run typecheck
-docker compose run --rm app npm test
-docker compose run --rm app npm run build
+docker compose run --rm app npm run verify
 ```
 
-The build output is written to the host workspace at `dist/`.
+This runs type-checking, unit tests, and a production bundle in sequence. The build output is written to the host workspace at `dist/`.
 
 ## Development watch mode
 
@@ -62,11 +60,26 @@ Docker is the supported contributor workflow. Direct host execution remains avai
 ```sh
 nvm use
 npm ci
-npm test
-npm run build
+npm run verify
 ```
 
 Choose either the Docker workflow or the host workflow for dependency installation. Remove host `node_modules` before switching back to Docker.
+
+## Create a release
+
+Releases are triggered by semantic-version tags. Before creating a tag, update the matching version in both `package.json` and `public/manifest.json`, then commit the changes.
+
+```sh
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+The GitHub Actions workflow verifies the tag and versions, runs type-checking and tests in Docker, builds the extension, and publishes a GitHub Release containing:
+
+- `distraction-blocker-<version>.zip`
+- `distraction-blocker-<version>.zip.sha256`
+
+The ZIP contains the contents of `dist/` at its root so it can be extracted and loaded through Chrome Developer Mode. Chrome Web Store publication is not part of this workflow.
 
 ## Privacy
 
