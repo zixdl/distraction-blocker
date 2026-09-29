@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Distraction Blocker",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Temporarily block distracting websites during a focus session.",
   "permissions": [
     "storage",
