@@ -1,0 +1,101 @@
+name: Release extension
+
+on:
+  push:
+    tags:
+      - "v*"
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Verify and package
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Validate tag format
+        shell: bash
+        run: |
+          if [[ ! "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Tag must match v<major>.<minor>.<patch>."
+            exit 1
+          fi
+
+      - name: Build verified extension artifact
+        run: |
+          mkdir -p release/dist
+          docker build \
+            --target artifact \
+            --output type=local,dest=release/dist \
+            .
+
+      - name: Validate release versions and contents
+        run: node scripts/validate-release.mjs "$GITHUB_REF_NAME" release/dist
+
+      - name: Create release assets
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          archive="distraction-blocker-${version}.zip"
+          mkdir -p release/assets
+          (
+            cd release/dist
+            zip -r "../assets/${archive}" .
+          )
+          unzip -Z1 "release/assets/${archive}" | grep -qx "manifest.json"
+          (
+            cd release/assets
+            sha256sum "${archive}" > "${archive}.sha256"
+          )
+
+      - name: Upload release assets
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-assets
+          path: release/assets/
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    name: Publish GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download release assets
+        uses: actions/download-artifact@v8
+        with:
+          name: release-assets
+          path: release/assets
+
+      - name: Ensure release does not already exist
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            echo "Release $GITHUB_REF_NAME already exists."
+            exit 1
+          fi
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            release/assets/* \
+            --verify-tag \
+            --title "Distraction Blocker $GITHUB_REF_NAME" \
+            --generate-notes

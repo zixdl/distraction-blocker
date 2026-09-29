@@ -1,9 +1,9 @@
 # Distraction Blocker — Personal MVP Specification
 
 **Status:** Approved for implementation
-**Version:** 0.2
-**Date:** 2026-09-28
-**Distribution:** Local installation through Chrome Developer Mode
+**Version:** 0.3
+**Date:** 2026-09-29
+**Distribution:** GitHub Release ZIP installed locally through Chrome Developer Mode
 
 ## 1. Purpose
 
@@ -187,7 +187,42 @@ docker compose up dev
 
 Direct host execution remains an optional convenience, not the canonical workflow. When used, its Node.js version must match the version declared by the project through `package.json` and a version file such as `.nvmrc` or `.node-version`. Host and container workflows must use the same npm scripts and lockfile.
 
-### 5.3 Extension components
+### 5.3 Release automation
+
+Pushing a semantic-version tag starts the GitHub Actions release workflow:
+
+```text
+Push v<major>.<minor>.<patch> tag
+        │
+        ▼
+Validate tag and project versions
+        │
+        ▼
+Docker type-check, test, and build
+        │
+        ▼
+Export verified extension files
+        │
+        ▼
+Create ZIP and SHA-256 checksum
+        │
+        ▼
+Publish GitHub Release
+```
+
+Requirements:
+
+- The tag version must match both `package.json` and `public/manifest.json`.
+- The release build must use the same Dockerfile and lockfile as local development.
+- The ZIP must contain the contents of `dist/` at its root, including `manifest.json`.
+- The released ZIP must be derived from the same Docker build that passed type-checking and automated tests.
+- Each release includes a SHA-256 checksum for the ZIP.
+- The build job has read-only repository access; only the publishing job receives `contents: write` permission.
+- Existing GitHub Releases are not overwritten automatically.
+- Tag creation and pushing remain manual release decisions.
+- Chrome Web Store publication, extension signing, and store-specific assets remain out of scope.
+
+### 5.4 Extension components
 
 - Service worker for session and blocking-rule management
 - Popup page
@@ -195,7 +230,7 @@ Direct host execution remains an optional convenience, not the canonical workflo
 - Blocked page
 - Shared TypeScript modules for storage, domain normalization, and time calculations
 
-### 5.4 Blocking engine
+### 5.5 Blocking engine
 
 - Use `chrome.declarativeNetRequest` dynamic redirect rules.
 - Each enabled domain creates one rule scoped to `main_frame` requests.
@@ -299,6 +334,7 @@ The Personal MVP is complete when:
 13. Container builds write a Chrome-loadable `dist/` directory to the host workspace.
 14. Dependency files remain isolated in a Docker named volume rather than mixing Linux and host `node_modules`.
 15. A short README explains the canonical Docker workflow, optional host workflow, and unpacked-extension reload process.
+16. Pushing a valid semantic-version tag produces a GitHub Release with a verified ZIP and SHA-256 checksum.
 
 ## 10. Out of scope
 
@@ -306,7 +342,7 @@ The following are explicitly excluded from this version:
 
 - Chrome Web Store publication
 - Privacy Policy and store disclosures
-- Production packaging and store assets
+- Chrome Web Store packaging, signing, and store assets
 - Onboarding
 - Accounts or cloud sync
 - Notifications
