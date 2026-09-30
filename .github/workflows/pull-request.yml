@@ -1,0 +1,37 @@
+name: Pull request checks
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Verify pull request
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Validate release labels
+        run: |
+          mkdir -p release
+          jq '[{
+            number: .pull_request.number,
+            title: .pull_request.title,
+            labels: [.pull_request.labels[].name]
+          }]' "$GITHUB_EVENT_PATH" > release/pull-requests.json
+          node scripts/plan-release.mjs 0.0.0 release/pull-requests.json > /dev/null
+
+      - name: Type-check, test, and build in Docker
+        run: |
+          mkdir -p release/dist
+          docker build \
+            --target artifact \
+            --output type=local,dest=release/dist \
+            .

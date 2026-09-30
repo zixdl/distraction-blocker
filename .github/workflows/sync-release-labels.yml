@@ -1,0 +1,40 @@
+name: Sync release labels
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/sync-release-labels.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  sync:
+    name: Create or update release labels
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Sync labels
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh label create "release:patch" \
+            --color "0E8A16" \
+            --description "Publish a patch release after merge" \
+            --force
+          gh label create "release:minor" \
+            --color "1D76DB" \
+            --description "Publish a minor release after merge" \
+            --force
+          gh label create "release:major" \
+            --color "B60205" \
+            --description "Publish a major release after merge" \
+            --force
+          gh label create "release:none" \
+            --color "D4C5F9" \
+            --description "Do not publish a release for this pull request" \
+            --force

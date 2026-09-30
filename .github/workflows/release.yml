@@ -1,36 +1,132 @@
-name: Release extension
+name: Release merged pull request
 
 on:
-  push:
-    tags:
-      - "v*"
+  pull_request:
+    types: [closed]
 
 concurrency:
-  group: release-${{ github.ref }}
-  cancel-in-progress: false
+  group: extension-release
+  queue: max
 
 jobs:
-  build:
-    name: Verify and package
+  release:
+    name: Plan, verify, and publish
+    if: >-
+      github.event.pull_request.merged == true &&
+      github.event.pull_request.base.ref == 'main'
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
+      pull-requests: read
 
     steps:
-      - name: Check out source
+      - name: Check out merged source
         uses: actions/checkout@v7
         with:
+          fetch-depth: 0
           persist-credentials: false
+          ref: ${{ github.event.pull_request.merge_commit_sha }}
 
-      - name: Validate tag format
+      - name: Collect unreleased pull requests
+        id: history
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          MERGE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
         run: |
-          if [[ ! "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "Tag must match v<major>.<minor>.<patch>."
-            exit 1
+          mkdir -p release
+          latest_tag=""
+          existing_tag=""
+
+          while IFS= read -r tag; do
+            if [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              existing_tag="$tag"
+              break
+            fi
+          done < <(git tag --points-at "$MERGE_SHA" --sort=-version:refname)
+
+          while IFS= read -r tag; do
+            if [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              latest_tag="$tag"
+              break
+            fi
+          done < <(git tag --merged "$MERGE_SHA" --sort=-version:refname)
+
+          if [[ -n "$latest_tag" ]]; then
+            current_version="${latest_tag#v}"
+            commit_range="${latest_tag}..${MERGE_SHA}"
+          else
+            current_version="0.0.0"
+            commit_range="$MERGE_SHA"
           fi
 
+          printf '[]\n' > release/pull-requests.json
+
+          while IFS= read -r commit_sha; do
+            associated_prs="$(
+              gh api \
+                -H "Accept: application/vnd.github+json" \
+                "repos/${GITHUB_REPOSITORY}/commits/${commit_sha}/pulls" \
+                --jq '[.[] | select(.merged_at != null and .base.ref == "main") | {number, title, labels: [.labels[].name]}]'
+            )"
+
+            jq -s 'add | unique_by(.number)' \
+              release/pull-requests.json \
+              <(printf '%s\n' "$associated_prs") \
+              > release/pull-requests.next.json
+            mv release/pull-requests.next.json release/pull-requests.json
+          done < <(git rev-list --reverse "$commit_range")
+
+          jq '[{
+            number: .pull_request.number,
+            title: .pull_request.title,
+            labels: [.pull_request.labels[].name]
+          }]' "$GITHUB_EVENT_PATH" > release/current-pull-request.json
+
+          jq -s 'add | unique_by(.number) | sort_by(.number)' \
+            release/pull-requests.json \
+            release/current-pull-request.json \
+            > release/pull-requests.next.json
+          mv release/pull-requests.next.json release/pull-requests.json
+
+          echo "current_version=$current_version" >> "$GITHUB_OUTPUT"
+          echo "latest_tag=$latest_tag" >> "$GITHUB_OUTPUT"
+          echo "existing_tag=$existing_tag" >> "$GITHUB_OUTPUT"
+
+      - name: Plan release
+        id: plan
+        shell: bash
+        run: |
+          if [[ -n "${{ steps.history.outputs.existing_tag }}" ]]; then
+            version="${{ steps.history.outputs.existing_tag }}"
+            version="${version#v}"
+            jq -n \
+              --arg version "$version" \
+              '{
+                release: true,
+                currentVersion: $version,
+                nextVersion: $version,
+                releaseType: "resume",
+                pullRequests: []
+              }' > release/plan.json
+          else
+            node scripts/plan-release.mjs \
+              "${{ steps.history.outputs.current_version }}" \
+              release/pull-requests.json \
+              > release/plan.json
+          fi
+
+          cat release/plan.json
+          echo "release=$(jq -r '.release' release/plan.json)" >> "$GITHUB_OUTPUT"
+          echo "version=$(jq -r '.nextVersion // ""' release/plan.json)" >> "$GITHUB_OUTPUT"
+
+      - name: Set release version
+        if: steps.plan.outputs.release == 'true'
+        run: node scripts/set-release-version.mjs "${{ steps.plan.outputs.version }}"
+
       - name: Build verified extension artifact
+        if: steps.plan.outputs.release == 'true'
         run: |
           mkdir -p release/dist
           docker build \
@@ -39,13 +135,19 @@ jobs:
             .
 
       - name: Validate release versions and contents
-        run: node scripts/validate-release.mjs "$GITHUB_REF_NAME" release/dist
+        if: steps.plan.outputs.release == 'true'
+        run: >-
+          node scripts/validate-release.mjs
+          "${{ steps.plan.outputs.version }}"
+          release/dist
 
       - name: Create release assets
+        if: steps.plan.outputs.release == 'true'
         shell: bash
+        env:
+          VERSION: ${{ steps.plan.outputs.version }}
         run: |
-          version="${GITHUB_REF_NAME#v}"
-          archive="distraction-blocker-${version}.zip"
+          archive="distraction-blocker-${VERSION}.zip"
           mkdir -p release/assets
           (
             cd release/dist
@@ -57,45 +159,53 @@ jobs:
             sha256sum "${archive}" > "${archive}.sha256"
           )
 
-      - name: Upload release assets
-        uses: actions/upload-artifact@v7
-        with:
-          name: release-assets
-          path: release/assets/
-          if-no-files-found: error
-          retention-days: 7
-
-  release:
-    name: Publish GitHub Release
-    needs: build
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-
-    steps:
-      - name: Download release assets
-        uses: actions/download-artifact@v8
-        with:
-          name: release-assets
-          path: release/assets
-
-      - name: Ensure release does not already exist
+      - name: Publish tag and GitHub Release
+        if: steps.plan.outputs.release == 'true'
+        shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
+          MERGE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
+          VERSION: ${{ steps.plan.outputs.version }}
         run: |
-          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            echo "Release $GITHUB_REF_NAME already exists."
+          tag="v${VERSION}"
+          existing_sha="$(
+            gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${tag}" \
+              --jq '.object.sha' 2>/dev/null || true
+          )"
+
+          if [[ -n "$existing_sha" && "$existing_sha" != "$MERGE_SHA" ]]; then
+            echo "Tag ${tag} already points to ${existing_sha}, expected ${MERGE_SHA}."
             exit 1
           fi
 
-      - name: Create GitHub Release
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-        run: |
-          gh release create "$GITHUB_REF_NAME" \
-            release/assets/* \
-            --verify-tag \
-            --title "Distraction Blocker $GITHUB_REF_NAME" \
-            --generate-notes
+          if [[ -z "$existing_sha" ]]; then
+            gh api \
+              --method POST \
+              "repos/${GITHUB_REPOSITORY}/git/refs" \
+              -f ref="refs/tags/${tag}" \
+              -f sha="$MERGE_SHA" \
+              > /dev/null
+          fi
+
+          release_state="$(
+            gh release view "$tag" --json isDraft --jq '.isDraft' 2>/dev/null || true
+          )"
+
+          if [[ "$release_state" == "false" ]]; then
+            echo "Release ${tag} is already published."
+            exit 0
+          fi
+
+          if [[ "$release_state" == "true" ]]; then
+            gh release upload "$tag" release/assets/* --clobber
+          else
+            gh release create "$tag" \
+              release/assets/* \
+              --target "$MERGE_SHA" \
+              --draft \
+              --title "Distraction Blocker ${tag}" \
+              --generate-notes
+          fi
+
+          gh release edit "$tag" --draft=false

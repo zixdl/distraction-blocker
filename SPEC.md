@@ -1,8 +1,8 @@
 # Distraction Blocker — Personal MVP Specification
 
 **Status:** Approved for implementation
-**Version:** 0.3
-**Date:** 2026-09-29
+**Version:** 0.4
+**Date:** 2026-09-30
 **Distribution:** GitHub Release ZIP installed locally through Chrome Developer Mode
 
 ## 1. Purpose
@@ -179,9 +179,7 @@ Standard contributor commands:
 
 ```sh
 docker compose build
-docker compose run --rm app npm test
-docker compose run --rm app npm run typecheck
-docker compose run --rm app npm run build
+docker compose run --rm app npm run verify
 docker compose up dev
 ```
 
@@ -189,13 +187,19 @@ Direct host execution remains an optional convenience, not the canonical workflo
 
 ### 5.3 Release automation
 
-Pushing a semantic-version tag starts the GitHub Actions release workflow:
+Merging a pull request into `main` starts the GitHub Actions release workflow. Commit messages and pull request titles remain unrestricted.
 
 ```text
-Push v<major>.<minor>.<patch> tag
+Merge pull request into main
         │
         ▼
-Validate tag and project versions
+Read optional release label
+        │
+        ▼
+Calculate the next version from the latest tag
+        │
+        ▼
+Update versions in the temporary CI workspace
         │
         ▼
 Docker type-check, test, and build
@@ -204,7 +208,7 @@ Docker type-check, test, and build
 Export verified extension files
         │
         ▼
-Create ZIP and SHA-256 checksum
+Create ZIP, checksum, and Git tag
         │
         ▼
 Publish GitHub Release
@@ -212,14 +216,22 @@ Publish GitHub Release
 
 Requirements:
 
-- The tag version must match both `package.json` and `public/manifest.json`.
+- A pull request without a release label produces a patch release by default.
+- The optional labels are `release:patch`, `release:minor`, `release:major`, and `release:none`.
+- A pull request may have at most one `release:*` label.
+- Pull request commit messages, titles, and merge strategy do not determine the release version.
+- Release jobs run sequentially and fetch tags immediately before calculating the next version.
+- When multiple merged pull requests have not been released, the highest requested release type wins: major, minor, patch, then none.
+- `release:none` suppresses a standalone release but does not exclude that pull request's code from a later artifact.
+- Git tags are the source of truth for released versions.
+- CI updates `package.json`, `package-lock.json`, and `public/manifest.json` only in its temporary workspace.
+- CI creates the matching semantic-version tag automatically after verification succeeds.
 - The release build must use the same Dockerfile and lockfile as local development.
 - The ZIP must contain the contents of `dist/` at its root, including `manifest.json`.
 - The released ZIP must be derived from the same Docker build that passed type-checking and automated tests.
 - Each release includes a SHA-256 checksum for the ZIP.
-- The build job has read-only repository access; only the publishing job receives `contents: write` permission.
+- Pull request checks have read-only repository access; only the release job receives `contents: write` permission.
 - Existing GitHub Releases are not overwritten automatically.
-- Tag creation and pushing remain manual release decisions.
 - Chrome Web Store publication, extension signing, and store-specific assets remain out of scope.
 
 ### 5.4 Extension components
@@ -239,7 +251,7 @@ Requirements:
 - The extension uses a reserved rule-ID range and modifies only its own rules.
 - The service worker reconciles stored session state with installed rules whenever it starts.
 
-### 5.5 Permissions
+### 5.6 Permissions
 
 Because this version is installed locally for one known user, it favors implementation simplicity over granular permission prompts.
 
@@ -252,7 +264,7 @@ Expected manifest permissions:
 
 The extension does not request `tabs`, `webNavigation`, browsing history, cookies, notifications, or incognito access.
 
-### 5.6 Minimal data model
+### 5.7 Minimal data model
 
 ```ts
 type ExtensionState = {
@@ -334,7 +346,8 @@ The Personal MVP is complete when:
 13. Container builds write a Chrome-loadable `dist/` directory to the host workspace.
 14. Dependency files remain isolated in a Docker named volume rather than mixing Linux and host `node_modules`.
 15. A short README explains the canonical Docker workflow, optional host workflow, and unpacked-extension reload process.
-16. Pushing a valid semantic-version tag produces a GitHub Release with a verified ZIP and SHA-256 checksum.
+16. Merging a pull request into `main` automatically creates the appropriate semantic-version tag and GitHub Release when required.
+17. Release builds synchronize `package.json`, `package-lock.json`, source manifest, and built manifest versions without a manual version commit.
 
 ## 10. Out of scope
 
