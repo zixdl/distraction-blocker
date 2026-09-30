@@ -65,21 +65,29 @@ npm run verify
 
 Choose either the Docker workflow or the host workflow for dependency installation. Remove host `node_modules` before switching back to Docker.
 
-## Create a release
+## Automated releases
 
-Releases are triggered by semantic-version tags. Before creating a tag, update the matching version in both `package.json` and `public/manifest.json`, then commit the changes.
+Merging a pull request into `main` triggers the release workflow. Commit messages and pull request titles are unrestricted. If the pull request has no release label, the workflow publishes a patch release by default.
 
-```sh
-git tag v0.1.0
-git push origin v0.1.0
-```
+Optional labels override that default:
 
-The GitHub Actions workflow verifies the tag and versions, runs type-checking and tests in Docker, builds the extension, and publishes a GitHub Release containing:
+| Label | Result |
+| --- | --- |
+| `release:patch` | Publish a patch release |
+| `release:minor` | Publish a minor release |
+| `release:major` | Publish a major release |
+| `release:none` | Do not publish a release for this pull request |
+
+Use at most one release label per pull request. The pull request workflow rejects conflicting or unsupported `release:*` labels.
+
+After a merge, GitHub Actions calculates the next version from the latest release tag, updates `package.json`, `package-lock.json`, and `public/manifest.json` in its temporary workspace, verifies the project in Docker, and publishes:
 
 - `distraction-blocker-<version>.zip`
 - `distraction-blocker-<version>.zip.sha256`
 
-The ZIP contains the contents of `dist/` at its root so it can be extracted and loaded through Chrome Developer Mode. Chrome Web Store publication is not part of this workflow.
+The workflow creates the matching Git tag automatically. Version changes are not committed back to `main`; Git tags are the release-version source of truth. If several pull requests have not yet been released, the highest requested release type wins. The ZIP contains the contents of `dist/` at its root so it can be extracted and loaded through Chrome Developer Mode.
+
+Release labels are created automatically when the release-label workflow first reaches `main`. Chrome Web Store publication is not part of this process.
 
 ## Privacy
 

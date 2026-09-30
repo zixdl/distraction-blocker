@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-const [, , tag, distDirectory = "dist"] = process.argv;
+const [, , versionOrTag, distDirectory = "dist"] = process.argv;
 
 function fail(message) {
   console.error(`Release validation failed: ${message}`);
@@ -16,17 +16,22 @@ function readJson(path) {
   }
 }
 
-if (!tag || !/^v\d+\.\d+\.\d+$/.test(tag)) {
-  fail(`tag "${tag ?? ""}" must match v<major>.<minor>.<patch>`);
+if (!versionOrTag || !/^v?\d+\.\d+\.\d+$/.test(versionOrTag)) {
+  fail(
+    `version "${versionOrTag ?? ""}" must match <major>.<minor>.<patch>`,
+  );
 }
 
-const expectedVersion = tag.slice(1);
+const expectedVersion = versionOrTag.replace(/^v/, "");
 const packageJson = readJson("package.json");
+const packageLock = readJson("package-lock.json");
 const sourceManifest = readJson(join("public", "manifest.json"));
 const builtManifest = readJson(join(distDirectory, "manifest.json"));
 
 for (const [name, actualVersion] of [
   ["package.json", packageJson.version],
+  ["package-lock.json", packageLock.version],
+  ["package-lock.json root package", packageLock.packages?.[""]?.version],
   ["public/manifest.json", sourceManifest.version],
   [`${distDirectory}/manifest.json`, builtManifest.version],
 ]) {
@@ -49,4 +54,4 @@ for (const requiredFile of [
   }
 }
 
-console.log(`Release ${tag} is valid.`);
+console.log(`Release v${expectedVersion} is valid.`);
