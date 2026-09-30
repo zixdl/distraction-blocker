@@ -169,10 +169,14 @@ jobs:
           VERSION: ${{ steps.plan.outputs.version }}
         run: |
           tag="v${VERSION}"
-          existing_sha="$(
+          existing_sha=""
+
+          if ! existing_sha="$(
             gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${tag}" \
-              --jq '.object.sha' 2>/dev/null || true
-          )"
+              --jq '.object.sha' 2>/dev/null
+          )"; then
+            existing_sha=""
+          fi
 
           if [[ -n "$existing_sha" && "$existing_sha" != "$MERGE_SHA" ]]; then
             echo "Tag ${tag} already points to ${existing_sha}, expected ${MERGE_SHA}."
